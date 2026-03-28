@@ -2,160 +2,178 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import json
 import os
+import webbrowser  # Importação necessária para abrir links
 
-# Função para carregar dados do JSON
+# --- Lógica de Dados ---
+
 def load_landscapes():
     if os.path.exists("landscapes.json"):
-        with open("landscapes.json", "r") as file:
-            return json.load(file)
+        try:
+            with open("landscapes.json", "r", encoding="utf-8") as file:
+                return json.load(file)
+        except:
+            return []
     return []
 
-# Função para salvar dados no JSON
 def save_landscapes(data):
-    with open("landscapes.json", "w") as file:
-        json.dump(data, file, indent=4)
+    with open("landscapes.json", "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4, ensure_ascii=False)
 
-# Função para cadastrar uma nova paisagem
+def open_url(url):
+    """Abre o link no navegador padrão"""
+    webbrowser.open_new(url)
+
+# --- Funções da Interface ---
+
 def register_landscape():
     city = city_entry.get().strip()
     country = country_entry.get().strip()
+    landmark = landmark_entry.get().strip()
     image_url = image_url_entry.get().strip()
 
-    if city and country and image_url:
-        landscapes.append({"city": city, "country": country, "image_url": image_url})
+    if city and country and landmark and image_url:
+        landscapes.append({
+            "city": city, 
+            "country": country, 
+            "landmark": landmark, 
+            "image_url": image_url
+        })
         save_landscapes(landscapes)
-        refresh_table()
-        city_entry.delete(0, tk.END)
-        country_entry.delete(0, tk.END)
-        image_url_entry.delete(0, tk.END)
+        refresh_cards()
+        for e in [city_entry, country_entry, landmark_entry, image_url_entry]:
+            e.delete(0, tk.END)
         messagebox.showinfo("Cadastro", "Paisagem cadastrada com sucesso!")
     else:
         messagebox.showwarning("Atenção", "Todos os campos devem ser preenchidos.")
 
-# Função para atualizar a tabela com os dados do JSON
-def refresh_table():
-    for row in table.get_children():
-        table.delete(row)
-    for index, landscape in enumerate(landscapes):
-        table.insert("", "end", values=(landscape["city"], landscape["country"], landscape["image_url"], "Editar/Excluir"))
-
-# Função para excluir uma paisagem
-def delete_landscape(index):
-    landscapes.pop(index)
-    save_landscapes(landscapes)
-    refresh_table()
-    messagebox.showinfo("Exclusão", "Paisagem excluída com sucesso!")
-
-# Função para buscar paisagens
-def search_landscapes(event):
+def refresh_cards():
+    for widget in scrollable_frame.winfo_children():
+        widget.destroy()
+    
     search_term = search_entry.get().lower()
-    filtered_landscapes = [l for l in landscapes if search_term in l["city"].lower() or search_term in l["country"].lower()]
-    for row in table.get_children():
-        table.delete(row)
-    for index, landscape in enumerate(filtered_landscapes):
-        table.insert("", "end", values=(landscape["city"], landscape["country"], landscape["image_url"], "Editar/Excluir"))
+    
+    for index, landscape in enumerate(landscapes):
+        if (search_term in landscape["city"].lower() or 
+            search_term in landscape["country"].lower() or 
+            search_term in landscape.get("landmark", "").lower()):
+            
+            card = tk.Frame(scrollable_frame, bg="white", highlightbackground="#d1d1d1", 
+                            highlightthickness=1, bd=0)
+            card.pack(fill="x", padx=15, pady=8)
 
-# Função para editar uma paisagem
+            info_frame = tk.Frame(card, bg="white")
+            info_frame.pack(side="left", padx=15, pady=10, fill="x", expand=True)
+
+            tk.Label(info_frame, text=f"{landscape['city']}, {landscape['country']}", 
+                     font=("Arial", 12, "bold"), bg="white", anchor="w").pack(fill="x")
+            
+            tk.Label(info_frame, text=f"📍 Ponto Turístico: {landscape.get('landmark', 'N/A')}", 
+                     font=("Arial", 10), bg="white", fg="#444", anchor="w").pack(fill="x")
+            
+            # Label do Link com evento de clique
+            url = landscape['image_url']
+            link_label = tk.Label(info_frame, text=url, 
+                                 font=("Arial", 8, "underline"), bg="white", fg="#0000EE", 
+                                 anchor="w", cursor="hand2", wraplength=500, justify="left")
+            link_label.pack(fill="x")
+            
+            # Vincula o clique do mouse à função de abrir URL
+            link_label.bind("<Button-1>", lambda e, u=url: open_url(u))
+
+            btn_edit = tk.Button(card, text="Editar", bg="#4a90e2", fg="white", 
+                                 relief="flat", padx=15,
+                                 command=lambda i=index: edit_landscape(i))
+            btn_edit.pack(side="right", padx=15, pady=10)
+
+def search_landscapes(event):
+    refresh_cards()
+
 def edit_landscape(index):
-    # Cria uma nova janela para editar os dados
     edit_window = tk.Toplevel(root)
     edit_window.title("Editar Paisagem")
-    edit_window.geometry("400x300")
+    edit_window.geometry("400x400")
     edit_window.configure(bg="#f0f8ff")
 
-    # Campos para edição
-    tk.Label(edit_window, text="Cidade:", bg="#f0f8ff").pack(pady=5)
-    edit_city = tk.Entry(edit_window)
-    edit_city.pack(pady=5)
-    edit_city.insert(0, landscapes[index]["city"])  # Preenche com o valor atual
-
-    tk.Label(edit_window, text="País:", bg="#f0f8ff").pack(pady=5)
-    edit_country = tk.Entry(edit_window)
-    edit_country.pack(pady=5)
-    edit_country.insert(0, landscapes[index]["country"])  # Preenche com o valor atual
-
-    tk.Label(edit_window, text="Link da Paisagem:", bg="#f0f8ff").pack(pady=5)
-    edit_image_url = tk.Entry(edit_window)
-    edit_image_url.pack(pady=5)
-    edit_image_url.insert(0, landscapes[index]["image_url"])  # Preenche com o valor atual
-
-    # Função para salvar as edições
-    def save_edit():
-        new_city = edit_city.get().strip()
-        new_country = edit_country.get().strip()
-        new_image_url = edit_image_url.get().strip()
-
-        if new_city and new_country and new_image_url:
-            landscapes[index] = {"city": new_city, "country": new_country, "image_url": new_image_url}
-            save_landscapes(landscapes)
-            refresh_table()
-            messagebox.showinfo("Sucesso", "Dados atualizados com sucesso!")
-            edit_window.destroy()  # Fecha a janela de edição
-        else:
-            messagebox.showwarning("Atenção", "Todos os campos devem ser preenchidos.")
-
-    # Função para excluir a paisagem
-    def confirm_delete():
-        if messagebox.askyesno("Confirmação", "Tem certeza de que deseja excluir esta paisagem?"):
-            delete_landscape(index)
-            edit_window.destroy()  # Fecha a janela de edição
-
-    # Botões para salvar edições e excluir paisagem
-    save_button = tk.Button(edit_window, text="Salvar", command=save_edit, bg="#4a90e2", fg="white")
-    save_button.pack(pady=10)
+    fields = [("Cidade:", "city"), ("País:", "country"), 
+              ("Ponto Turístico:", "landmark"), ("Link da Imagem:", "image_url")]
     
-    delete_button = tk.Button(edit_window, text="Excluir", command=confirm_delete, bg="#d9534f", fg="white")
-    delete_button.pack(pady=10)
+    entries = {}
+    for label_text, key in fields:
+        tk.Label(edit_window, text=label_text, bg="#f0f8ff", font=("Arial", 9, "bold")).pack(pady=(10,0))
+        entry = tk.Entry(edit_window, width=45)
+        entry.pack(pady=5)
+        entry.insert(0, landscapes[index].get(key, ""))
+        entries[key] = entry
 
-# Interface gráfica
+    def save_edit():
+        landscapes[index] = {k: e.get().strip() for k, e in entries.items()}
+        save_landscapes(landscapes)
+        refresh_cards()
+        messagebox.showinfo("Sucesso", "Dados atualizados!")
+        edit_window.destroy()
+
+    def confirm_delete():
+        if messagebox.askyesno("Confirmação", "Deseja excluir?"):
+            landscapes.pop(index)
+            save_landscapes(landscapes)
+            refresh_cards()
+            edit_window.destroy()
+
+    tk.Button(edit_window, text="Salvar Alterações", bg="#28a745", fg="white", 
+              font=("Arial", 10, "bold"), command=save_edit, width=20).pack(pady=20)
+    tk.Button(edit_window, text="Excluir Paisagem", bg="#d9534f", fg="white", 
+              command=confirm_delete, width=20).pack()
+
+# --- Estrutura da Janela Principal ---
+
 root = tk.Tk()
-root.title("Cadastro e Lista de Paisagens")
-root.geometry("700x500")
-root.configure(bg="#f0f8ff")
+root.title("📍 Explorador de Paisagens")
+root.geometry("850x700")
+root.configure(bg="#eef2f5")
 
-# Entrada de dados
-tk.Label(root, text="Cidade:", bg="#f0f8ff").pack()
-city_entry = tk.Entry(root)
-city_entry.pack()
+header = tk.Frame(root, bg="#eef2f5", pady=20)
+header.pack(fill="x")
 
-tk.Label(root, text="País:", bg="#f0f8ff").pack()
-country_entry = tk.Entry(root)
-country_entry.pack()
+input_frame = tk.Frame(header, bg="#eef2f5")
+input_frame.pack()
 
-tk.Label(root, text="Link da Paisagem:", bg="#f0f8ff").pack()
-image_url_entry = tk.Entry(root)
-image_url_entry.pack()
+labels = ["Cidade:", "País:", "Ponto Turístico:", "Link da Imagem:"]
+entry_widgets = []
+for i, text in enumerate(labels):
+    tk.Label(input_frame, text=text, bg="#eef2f5", font=("Arial", 9)).grid(row=i, column=0, sticky="e", padx=5, pady=2)
+    entry = tk.Entry(input_frame, width=50)
+    entry.grid(row=i, column=1, padx=5, pady=2)
+    entry_widgets.append(entry)
 
-register_button = tk.Button(root, text="Cadastrar", command=register_landscape, bg="#28a745", fg="white")
-register_button.pack(pady=10)
+city_entry, country_entry, landmark_entry, image_url_entry = entry_widgets
 
-# Entrada de busca
-search_entry = tk.Entry(root)
-search_entry.pack()
+tk.Button(header, text="Cadastrar Paisagem", command=register_landscape, 
+          bg="#28a745", fg="white", font=("Arial", 10, "bold"), pady=5, padx=20).pack(pady=10)
+
+search_container = tk.Frame(root, bg="#eef2f5", padx=20, pady=10)
+search_container.pack(fill="x")
+tk.Label(search_container, text="🔍 Buscar:", bg="#eef2f5", font=("Arial", 10, "bold")).pack(side="left")
+search_entry = tk.Entry(search_container)
+search_entry.pack(side="left", fill="x", expand=True, padx=10)
 search_entry.bind("<KeyRelease>", search_landscapes)
 
-# Tabela de exibição
-table = ttk.Treeview(root, columns=("city", "country", "image_url", "actions"), show="headings")
-table.heading("city", text="Cidade")
-table.heading("country", text="País")
-table.heading("image_url", text="Link da Paisagem")
-table.heading("actions", text="Ações")
-table.pack(fill=tk.BOTH, expand=True)
+container = tk.Frame(root, bg="#eef2f5")
+container.pack(fill="both", expand=True)
 
-# Função para associar ações de edição e exclusão à tabela
-def table_action(event):
-    selected_item = table.selection()[0]
-    selected_index = table.index(selected_item)
-    col_id = table.identify_column(event.x)
-    
-    # Coluna de ações, onde estão os botões
-    if col_id == "#4":  # Verifica se a coluna é "Ações"
-        edit_landscape(selected_index)
+canvas = tk.Canvas(container, bg="#eef2f5", highlightthickness=0)
+scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+scrollable_frame = tk.Frame(canvas, bg="#eef2f5")
 
-table.bind("<Double-1>", table_action)
+window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 
-# Carrega os dados iniciais e atualiza a tabela
+scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+canvas.bind("<Configure>", lambda e: canvas.itemconfig(window_id, width=e.width))
+
+canvas.configure(yscrollcommand=scrollbar.set)
+canvas.pack(side="left", fill="both", expand=True)
+scrollbar.pack(side="right", fill="y")
+
 landscapes = load_landscapes()
-refresh_table()
+refresh_cards()
 
 root.mainloop()
